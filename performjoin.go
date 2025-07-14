@@ -120,6 +120,9 @@ func PerformJoin(
 	signingKey := input.PrivateKey
 	keyID := input.KeyID
 	origOrigin := origin
+	/* Kenji: PerformJoin provides high level functionality that will attempt a federated room join
+	Modify logic a bit */ 
+
 	switch respMakeJoin.GetRoomVersion() {
 	case RoomVersionPseudoIDs:
 		// we successfully did a make_join, create a senderID for this user now

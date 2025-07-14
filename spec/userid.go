@@ -23,6 +23,14 @@ func NewUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
 	return parseAndValidateUserID(id, allowHistoricalIDs)
 }
 
+// Creates a new Encrypted UserID, returning an error if invalid
+func NewEncryptedUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
+	// TODO: Figure out encryptedUserID structure. Does it have both local and global parts? 
+	// Do we make it adhere to current UserID requirements?
+	// Will we need to base64 encode it?
+	return parseAndValidateUserID(id, allowHistoricalIDs)
+}
+
 // Creates a new UserID, panicing if invalid
 func NewUserIDOrPanic(id string, allowHistoricalIDs bool) UserID {
 	userID, err := parseAndValidateUserID(id, allowHistoricalIDs)

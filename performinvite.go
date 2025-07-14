@@ -47,6 +47,7 @@ type PerformInviteInput struct {
 	StoreSenderIDFromPublicID spec.StoreSenderIDFromPublicID // Creates the senderID -> userID for the room creator
 }
 
+// Kenji Add/Switch to newly defined invite process
 // PerformInvite - Performs all the checks required to validate the invite is allowed
 // to happen.
 // On success will return either nothing (in the case of inviting a local user) or
@@ -90,7 +91,7 @@ func PerformInvite(ctx context.Context, input PerformInviteInput, fedClient Fede
 			fmt.Sprintf("Room version %q is not supported by this server.", input.RoomVersion),
 		)
 	}
-
+	// It's just checking that the user's isn't double invited.
 	invitedSenderID, err := input.SenderIDQuerier(input.RoomID, input.Invitee)
 	if err != nil {
 		return nil, err
@@ -168,10 +169,13 @@ func PerformInvite(ctx context.Context, input PerformInviteInput, fedClient Fede
 	// in which case we can give up processing here.
 	var inviteEvent PDU
 	switch input.RoomVersion {
+// Kenji: Handling for current PseudoID version! 
+	case RoomVersionPseudoAnonymity:
 	case RoomVersionPseudoIDs:
 		keyID := KeyID("ed25519:1")
+		// Does this create a new SenderID?
 		origin := spec.ServerName(spec.SenderIDFromPseudoIDKey(input.SigningKey))
-
+		// TODO: will eventually need to modify the invitation process for local users too.
 		if input.IsTargetLocal {
 			// if we invited a local user, we can also create a user room key, if it doesn't exist yet.
 			inviteeSenderID, inviteeSigningKey, err := input.SenderIDCreator(ctx, input.Invitee, input.RoomID, string(input.RoomVersion))
@@ -205,6 +209,8 @@ func PerformInvite(ctx context.Context, input PerformInviteInput, fedClient Fede
 				return nil, err
 			}
 		} else {
+			//TODO: Potentially change based on encryption scheme.
+			// inviteEvent, err = fedClient.SendInviteV4(ctx, input.EventTemplate, input.RoomVersion, inviteState)
 			inviteEvent, err = fedClient.SendInviteV3(ctx, input.EventTemplate, input.Invitee, input.RoomVersion, inviteState)
 			if err != nil {
 				logger.WithError(err).Error("fedClient.SendInviteV3 failed")
@@ -223,7 +229,9 @@ func PerformInvite(ctx context.Context, input PerformInviteInput, fedClient Fede
 				logger.WithError(err).Error("fedClient.SendInviteV3 returned event with invalid signatures")
 				return nil, spec.Forbidden(err.Error())
 			}
-
+			// TODO: Can this be safely removed?
+			// Why is it storing the invitee's mxid_mapping? 
+			// Does it matter if the Invitee was encrypted?
 			err = input.StoreSenderIDFromPublicID(ctx, spec.SenderID(*inviteEvent.StateKey()), input.Invitee.String(), input.RoomID)
 			if err != nil {
 				logger.WithError(err).Errorf("failed storing senderID for %s", input.Invitee.String())

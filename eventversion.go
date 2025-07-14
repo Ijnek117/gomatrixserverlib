@@ -63,6 +63,7 @@ const (
 	RoomVersionV10       RoomVersion = "10"
 	RoomVersionV11       RoomVersion = "11"
 	RoomVersionPseudoIDs RoomVersion = "org.matrix.msc4014"
+	RoomVersionPseudoAnonymity RoomVersion = "org.matrix.msc4014+"
 )
 
 // Event format constants.

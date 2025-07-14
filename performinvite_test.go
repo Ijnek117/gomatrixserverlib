@@ -69,6 +69,27 @@ func (f *TestFederatedInviteClient) SendInviteV3(ctx context.Context, event Prot
 
 	return inviteEvent, err
 }
+// Just added to remove some error
+func (f *TestFederatedInviteClient) SendInviteV4(ctx context.Context, event ProtoEvent, userID spec.UserID, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error) {
+	if f.shouldFail {
+		return nil, fmt.Errorf("failed sending invite")
+	}
+
+	_, sk, _ := ed25519.GenerateKey(rand.Reader)
+	keyID := KeyID("ed25519:1")
+
+	verImpl, err := GetRoomVersion(roomVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	stateKey := string(spec.SenderIDFromPseudoIDKey(sk))
+	event.StateKey = &stateKey
+	eb := verImpl.NewEventBuilderFromProtoEvent(&event)
+	inviteEvent, err := eb.Build(time.Now(), spec.ServerName(stateKey), keyID, sk)
+
+	return inviteEvent, err
+}
 
 type TestEventQuerier struct {
 	createEvent PDU
