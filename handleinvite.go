@@ -121,7 +121,7 @@ func HandleInviteV3(ctx context.Context, input HandleInviteV3Input) (PDU, error)
 	if ctx == nil {
 		panic("Missing valid Context")
 	}
-
+	// FIXME: might have done the roomversion stuff wrong
 	// Check that we can accept invites for this room version.
 	verImpl, err := GetRoomVersion(input.RoomVersion)
 	if err != nil {
