@@ -483,3 +483,178 @@ func HandleSendJoin(input HandleSendJoinInput) (*HandleSendJoinResponse, error) 
 		JoinEvent:     signed,
 	}, nil
 }
+
+func HandlePseudoSendJoin(input HandleSendJoinInput) (*HandleSendJoinResponse, error) {
+	if input.Verifier == nil {
+		panic("Missing valid JSONVerifier")
+	}
+	if input.MembershipQuerier == nil {
+		panic("Missing valid StateQuerier")
+	}
+	if input.UserIDQuerier == nil {
+		panic("Missing valid UserIDQuerier")
+	}
+	if input.Context == nil {
+		panic("Missing valid Context")
+	}
+	if input.StoreSenderIDFromPublicID == nil {
+		panic("Missing valid StoreSenderID")
+	}
+	verImpl, err := GetRoomVersion(input.RoomVersion)
+	if err != nil {
+		return nil, spec.UnsupportedRoomVersion(fmt.Sprintf("QueryRoomVersionForRoom returned unknown room version: %s", input.RoomVersion))
+	}
+
+	event, err := verImpl.NewEventFromUntrustedJSON(input.JoinEvent)
+	if err != nil {
+		return nil, spec.BadJSON("The request body could not be decoded into valid JSON: " + err.Error())
+	}
+
+	// Check that a state key is provided.
+	if event.StateKey() == nil || event.StateKeyEquals("") {
+		return nil, spec.BadJSON("No state key was provided in the join event.")
+	}
+	if !event.StateKeyEquals(string(event.SenderID())) {
+		return nil, spec.BadJSON("Event state key must match the event sender.")
+	}
+
+	var senderDomain string
+	// validate the mxid_mapping of the event
+	if input.RoomVersion == RoomVersionPseudoIDs {
+		// validate the signature first
+		mapping, err := getMXIDMapping(event)
+		if err != nil {
+			return nil, spec.BadJSON(err.Error())
+		}
+		if err = validateMXIDMappingSignatures(input.Context, event, *mapping, input.Verifier, verImpl); err != nil {
+			return nil, spec.Forbidden(err.Error())
+		}
+
+		// store the user room public key -> userID Domain mapping
+		// FIXME: K Mofied to create a fake userID with random localpart of a anytime we receive our server userID.
+		// Can be modified to be any userSigil
+		var customID = mapping.UserID
+		if mapping.UserID[0] != '@' {
+			customID = "@a:" + customID
+		}
+		if err = input.StoreSenderIDFromPublicID(input.Context, mapping.UserRoomKey, customID, input.RoomID); err != nil {
+			return nil, err
+		}
+
+		// Added this instead to check the Domain is correct too .
+		senderDomain = mapping.UserID
+		if senderDomain != string(input.RequestOrigin) {
+			return nil, spec.Forbidden("The sender does not match the server that originated the request")
+		}
+	}
+
+	// Check that the sender belongs to the server that is sending us
+	// the request. By this point we've already asserted that the sender
+	// and the state key are equal so we don't need to check both.
+
+	// In pseudoID rooms we don't need to hit federation endpoints to get e.g. signing keys,
+	// so we can replace the verifier with a more simple one which uses the senderID to verify the event.
+	toVerify := spec.ServerName(senderDomain)
+	if input.RoomVersion == RoomVersionPseudoIDs {
+		input.Verifier = JSONVerifierSelf{}
+		toVerify = spec.ServerName(event.SenderID())
+	}
+
+	// Check that the room ID is correct.
+	if event.RoomID().String() != input.RoomID.String() {
+		return nil, spec.BadJSON(
+			fmt.Sprintf(
+				"The room ID in the request path (%q) must match the room ID in the join event JSON (%q)",
+				input.RoomID.String(), event.RoomID().String(),
+			),
+		)
+	}
+
+	// Check that the event ID is correct.
+	if event.EventID() != input.EventID {
+		return nil, spec.BadJSON(
+			fmt.Sprintf(
+				"The event ID in the request path (%q) must match the event ID in the join event JSON (%q)",
+				input.EventID, event.EventID(),
+			),
+		)
+	}
+
+	// Check that this is in fact a join event
+	membership, err := event.Membership()
+	if err != nil {
+		return nil, spec.BadJSON("missing content.membership key")
+	}
+	if membership != spec.Join {
+		return nil, spec.BadJSON("membership must be 'join'")
+	}
+
+	// Check that the event is signed by the server sending the request.
+	redacted, err := verImpl.RedactEventJSON(event.JSON())
+	if err != nil {
+		util.GetLogger(input.Context).WithError(err).Error("RedactEventJSON failed")
+		return nil, spec.BadJSON("The event JSON could not be redacted")
+	}
+
+	verifyRequests := []VerifyJSONRequest{{
+		ServerName:           toVerify,
+		Message:              redacted,
+		AtTS:                 event.OriginServerTS(),
+		ValidityCheckingFunc: StrictValiditySignatureCheck,
+	}}
+	verifyResults, err := input.Verifier.VerifyJSONs(input.Context, verifyRequests)
+	if err != nil {
+		util.GetLogger(input.Context).WithError(err).Error("keys.VerifyJSONs failed")
+		return nil, spec.InternalServerError{}
+	}
+	if verifyResults[0].Error != nil {
+		return nil, spec.Forbidden("Signature check failed: " + verifyResults[0].Error.Error())
+	}
+
+	// Check if the user is already in the room. If they're already in then
+	// there isn't much point in sending another join event into the room.
+	// Also check to see if they are banned: if they are then we reject them.
+	existingMembership, err := input.MembershipQuerier.CurrentMembership(input.Context, input.RoomID, event.SenderID())
+	if err != nil {
+		return nil, spec.InternalServerError{Err: "internal server error"}
+	}
+
+	alreadyJoined := (existingMembership == spec.Join)
+	isBanned := (existingMembership == spec.Ban)
+
+	if isBanned {
+		return nil, spec.Forbidden("user is banned")
+	}
+
+	// If the membership content contains a user ID for a server that is not
+	// ours then we should kick it back.
+	var memberContent MemberContent
+	if err := json.Unmarshal(event.Content(), &memberContent); err != nil {
+		return nil, spec.BadJSON(err.Error())
+	}
+	if memberContent.AuthorisedVia != "" {
+		authorisedVia, err := spec.NewUserID(memberContent.AuthorisedVia, true)
+		if err != nil {
+			util.GetLogger(input.Context).WithError(err).Errorf("The authorising username %q is invalid.", memberContent.AuthorisedVia)
+			return nil, spec.BadJSON(fmt.Sprintf("The authorising username %q is invalid.", memberContent.AuthorisedVia))
+		}
+		if authorisedVia.Domain() != input.LocalServerName {
+			util.GetLogger(input.Context).Errorf("The authorising username %q does not belong to this server.", authorisedVia.String())
+			return nil, spec.BadJSON(fmt.Sprintf("The authorising username %q does not belong to this server.", authorisedVia.String()))
+		}
+	}
+
+	// Sign the membership event. This is required for restricted joins to work
+	// in the case that the authorised via user is one of our own users. It also
+	// doesn't hurt to do it even if it isn't a restricted join.
+	signed := event.Sign(
+		string(input.LocalServerName),
+		input.KeyID,
+		input.PrivateKey,
+	)
+
+	return &HandleSendJoinResponse{
+		AlreadyJoined: alreadyJoined,
+		JoinEvent:     signed,
+	}, nil
+}

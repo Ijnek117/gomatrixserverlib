@@ -63,7 +63,6 @@ const (
 	RoomVersionV10       RoomVersion = "10"
 	RoomVersionV11       RoomVersion = "11"
 	RoomVersionPseudoIDs RoomVersion = "org.matrix.msc4014"
-	RoomVersionPseudoAnonymity RoomVersion = "org.matrix.msc4014+"
 )
 
 // Event format constants.
@@ -326,27 +325,27 @@ var roomVersionMeta = map[RoomVersion]IRoomVersion{
 		newEventFromTrustedJSONFunc:            newEventFromTrustedJSONV2,
 		newEventFromTrustedJSONWithEventIDFunc: newEventFromTrustedJSONWithEventIDV2,
 	},
-	//TODO: modify as needed 
-	RoomVersionPseudoAnonymity: RoomVersionImpl{ // currently, just a copy of PseudoAnonymity
-		ver:                                    RoomVersionPseudoAnonymity,
-		stable:                                 false,
-		stateResAlgorithm:                      StateResV2,
-		eventFormat:                            EventFormatV2,
-		eventIDFormat:                          EventIDFormatV3,
-		redactionAlgorithm:                     redactEventJSONV4,
-		signatureValidityCheckFunc:             StrictValiditySignatureCheck,
-		canonicalJSONCheck:                     verifyEnforcedCanonicalJSON,
-		notificationLevelCheck:                 checkNotificationLevels,
-		restrictedJoinServernameFunc:           extractAuthorisedViaServerName,
-		checkRestrictedJoin:                    checkRestrictedJoin,
-		parsePowerLevelsFunc:                   parseIntegerPowerLevels,
-		checkKnockingAllowedFunc:               checkKnocking,
-		checkRestrictedJoinAllowedFunc:         allowRestrictedJoins,
-		checkCreateEvent:                       checkCreateEvent,
-		newEventFromUntrustedJSONFunc:          newEventFromUntrustedJSONV2,
-		newEventFromTrustedJSONFunc:            newEventFromTrustedJSONV2,
-		newEventFromTrustedJSONWithEventIDFunc: newEventFromTrustedJSONWithEventIDV2,
-	},
+	//TODO: modify as needed
+	// RoomVersionPseudoAnonymity: RoomVersionImpl{ // currently, just a copy of PseudoAnonymity
+	// 	ver:                                    RoomVersionPseudoAnonymity,
+	// 	stable:                                 false,
+	// 	stateResAlgorithm:                      StateResV2,
+	// 	eventFormat:                            EventFormatV2,
+	// 	eventIDFormat:                          EventIDFormatV3,
+	// 	redactionAlgorithm:                     redactEventJSONV4,
+	// 	signatureValidityCheckFunc:             StrictValiditySignatureCheck,
+	// 	canonicalJSONCheck:                     verifyEnforcedCanonicalJSON,
+	// 	notificationLevelCheck:                 checkNotificationLevels,
+	// 	restrictedJoinServernameFunc:           extractAuthorisedViaServerName,
+	// 	checkRestrictedJoin:                    checkRestrictedJoin,
+	// 	parsePowerLevelsFunc:                   parseIntegerPowerLevels,
+	// 	checkKnockingAllowedFunc:               checkKnocking,
+	// 	checkRestrictedJoinAllowedFunc:         allowRestrictedJoins,
+	// 	checkCreateEvent:                       checkCreateEvent,
+	// 	newEventFromUntrustedJSONFunc:          newEventFromUntrustedJSONV2,
+	// 	newEventFromTrustedJSONFunc:            newEventFromTrustedJSONV2,
+	// 	newEventFromTrustedJSONWithEventIDFunc: newEventFromTrustedJSONWithEventIDV2,
+	// },
 	"org.matrix.msc3667": RoomVersionImpl{ // based on room version 7
 		ver:                                    RoomVersion("org.matrix.msc3667"),
 		stable:                                 false,

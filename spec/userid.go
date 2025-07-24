@@ -23,7 +23,7 @@ func NewUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
 	return parseAndValidateUserID(id, allowHistoricalIDs)
 }
 
-// TODO: Figure out encryptedUserID structure. Should it have both local and global parts? 
+// TODO: Figure out encryptedUserID structure. Should it have both local and global parts?
 // Creates a new Encrypted UserID, returning an error if invalid
 func NewEncryptedUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
 	// Do we make it adhere to current UserID requirements?
@@ -31,7 +31,7 @@ func NewEncryptedUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
 	return parseAndValidateUserID(id, allowHistoricalIDs)
 }
 
-func DecryptUserID(id string, allowHistoricalIDs bool) (*UserID, error){
+func DecryptUserID(id string, allowHistoricalIDs bool) (*UserID, error) {
 	return parseAndValidateUserID(id, allowHistoricalIDs)
 }
 

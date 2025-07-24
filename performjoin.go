@@ -70,12 +70,25 @@ func PerformJoin(
 
 	// Try to perform a make_join using the information supplied in the
 	// request.
+	//TODO: K MODIFY TO WORK WITH ALL ROOMS/ Check room versions
+	// SenderID should have already been created during the inital invite dance.
+	var senderID spec.SenderID
+	senderID, signingKey, err := input.GetOrCreateSenderID(ctx, *input.UserID, *input.RoomID, string(RoomVersionPseudoIDs))
+	if err != nil {
+		return nil, &FederationError{
+			ServerName: input.ServerName,
+			Transient:  false,
+			Reachable:  false,
+			Err:        fmt.Errorf("SenderID not fetched properly"),
+		}
+	}
+
 	respMakeJoin, err := fedClient.MakeJoin(
 		ctx,
 		origin,
 		input.ServerName,
 		input.RoomID.String(),
-		input.UserID.String(),
+		string(senderID),
 	)
 	if err != nil {
 		// TODO: Check if the user was not allowed to join the room.
@@ -115,32 +128,18 @@ func PerformJoin(
 	if input.Content == nil {
 		input.Content = map[string]interface{}{}
 	}
-
-	var senderID spec.SenderID
-	signingKey := input.PrivateKey
 	keyID := input.KeyID
 	origOrigin := origin
-	/* Kenji: PerformJoin provides high level functionality that will attempt a federated room join
-	Modify logic a bit */ 
 
 	switch respMakeJoin.GetRoomVersion() {
 	case RoomVersionPseudoIDs:
-		// we successfully did a make_join, create a senderID for this user now
-		senderID, signingKey, err = input.GetOrCreateSenderID(ctx, *input.UserID, *input.RoomID, string(respMakeJoin.GetRoomVersion()))
-		if err != nil {
-			return nil, &FederationError{
-				ServerName: input.ServerName,
-				Transient:  false,
-				Reachable:  true,
-				Err:        fmt.Errorf("Cannot create user room key"),
-			}
-		}
 		keyID = "ed25519:1"
 		origin = spec.ServerName(senderID)
 
 		mapping := MXIDMapping{
 			UserRoomKey: senderID,
-			UserID:      input.UserID.String(),
+			//Modified to be server rather than UserID.
+			UserID: string(input.UserID.Domain()),
 		}
 		if err = mapping.Sign(origOrigin, input.KeyID, input.PrivateKey); err != nil {
 			return nil, &FederationError{
@@ -307,6 +306,10 @@ func storeMXIDMappings(
 		if ev.Type() != spec.MRoomMember {
 			continue
 		}
+		membership, err := ev.Membership()
+		if err != nil || membership == spec.Invite {
+			continue
+		}
 		mapping, err := getMXIDMapping(ev)
 		if err != nil {
 			return err
@@ -317,7 +320,12 @@ func storeMXIDMappings(
 			logrus.WithError(err).Error("invalid signature for mxid_mapping")
 			continue
 		}
-		if err := storeSenderID(ctx, ev.SenderID(), mapping.UserID, roomID); err != nil {
+
+		var customID = mapping.UserID
+		if mapping.UserID[0] != '@' {
+			customID = "@a:" + customID
+		}
+		if err := storeSenderID(ctx, ev.SenderID(), customID, roomID); err != nil {
 			return err
 		}
 	}

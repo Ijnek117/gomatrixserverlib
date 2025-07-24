@@ -433,14 +433,14 @@ func (a *allowerContext) createEventAllowed(event PDU) error {
 	if len(event.PrevEventIDs()) > 0 {
 		return errorf("create event must be the first event in the room: found %d prev_events", len(event.PrevEventIDs()))
 	}
+	/* TODO: K removed for now. Might need to modify to work/ add another field in PDU/ do the check earlier?
 	sender, err := a.userIDQuerier(a.roomID, event.SenderID())
 	if err != nil {
 		return err
 	}
 	if sender.Domain() != event.RoomID().Domain() {
 		return errorf("create event room ID domain does not match sender: %q != %q", event.RoomID().Domain(), sender.String())
-	}
-
+	}*/
 	verImpl, err := GetRoomVersion(event.Version())
 	if err != nil {
 		return nil
@@ -458,6 +458,9 @@ func (a *allowerContext) memberEventAllowed(event PDU) error {
 	allower, err := a.newMembershipAllower(a.provider, event)
 	if err != nil {
 		return err
+	}
+	if event.Version() == RoomVersionPseudoIDs {
+		return allower.membershipAllowedPseudo(event)
 	}
 	return allower.membershipAllowed(event)
 }
@@ -1041,6 +1044,65 @@ func (m *membershipAllower) membershipAllowed(event PDU) error { // nolint: gocy
 	if m.targetID == m.senderID {
 		// If the state_key and the sender are the same then this is an attempt
 		// by a user to update their own membership.
+		return m.membershipAllowedSelf()
+	}
+	// Otherwise this is an attempt to modify the membership of somebody else.
+	return m.membershipAllowedOther()
+}
+
+// membershipAllowed checks whether the membership event is allowed
+func (m *membershipAllower) membershipAllowedPseudo(event PDU) error { // nolint: gocyclo
+	if m.create.roomID != event.RoomID().String() {
+		return errorf(
+			"create event has different roomID: %q (%s) != %q (%s)",
+			event.RoomID().String(), event.EventID(), m.create.roomID, m.create.eventID,
+		)
+	}
+
+	var senderDomain string
+	if event.Type() == spec.MRoomMember {
+		mapping := membershipContent{}
+		if err := json.Unmarshal(event.Content(), &mapping); err != nil {
+			return err
+		}
+		// Changed to get the Domain directly from UserID.
+		if mapping.MXIDMapping != nil {
+			senderDomain = mapping.MXIDMapping.UserID
+		}
+	}
+
+	if err := m.create.DomainAllowed(senderDomain); err != nil {
+		return err
+	}
+
+	// Special case the first join event in the room to allow the creator to join.
+	// https://github.com/matrix-org/synapse/blob/v0.18.5/synapse/api/auth.py#L328
+	if m.targetID == string(m.createEvent.SenderID()) &&
+		m.newMember.Membership == spec.Join &&
+		m.senderID == m.targetID &&
+		len(event.PrevEventIDs()) == 1 {
+
+		// Grab the event ID of the previous event.
+		prevEventID := event.PrevEventIDs()[0]
+
+		if prevEventID == m.create.eventID {
+			// If this is the room creator joining the room directly after the
+			// the create event, then allow.
+			return nil
+		}
+		// Otherwise fall back to the normal checks.
+	}
+
+	if m.newMember.Membership == spec.Invite && m.newMember.ThirdPartyInvite != nil {
+		// Special case third party invites
+		// https://github.com/matrix-org/synapse/blob/v0.18.5/synapse/api/auth.py#L393
+		return m.membershipAllowedFromThirdPartyInvite()
+	}
+
+	if m.targetID == m.senderID {
+		// If the state_key and the sender are the same then this is an attempt
+		// by a user to update their own membership.
+		fmt.Println("All the way here now")
 		return m.membershipAllowedSelf()
 	}
 	// Otherwise this is an attempt to modify the membership of somebody else.

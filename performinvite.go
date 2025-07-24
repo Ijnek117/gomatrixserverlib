@@ -47,7 +47,6 @@ type PerformInviteInput struct {
 	StoreSenderIDFromPublicID spec.StoreSenderIDFromPublicID // Creates the senderID -> userID for the room creator
 }
 
-// Kenji Add/Switch to newly defined invite process
 // PerformInvite - Performs all the checks required to validate the invite is allowed
 // to happen.
 // On success will return either nothing (in the case of inviting a local user) or
@@ -169,8 +168,6 @@ func PerformInvite(ctx context.Context, input PerformInviteInput, fedClient Fede
 	// in which case we can give up processing here.
 	var inviteEvent PDU
 	switch input.RoomVersion {
-// Kenji: Handling for current PseudoID version! 
-	case RoomVersionPseudoAnonymity:
 	case RoomVersionPseudoIDs:
 		keyID := KeyID("ed25519:1")
 		// Does this create a new SenderID?
