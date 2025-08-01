@@ -69,8 +69,9 @@ func (f *TestFederatedInviteClient) SendInviteV3(ctx context.Context, event Prot
 
 	return inviteEvent, err
 }
-// Just added to remove some error
-func (f *TestFederatedInviteClient) SendInviteV4(ctx context.Context, event ProtoEvent, userID spec.UserID, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error) {
+
+// TODO: Need to implement correctly. Only added to remove some errosrs.
+func (f *TestFederatedInviteClient) SendEncryptedInvite(ctx context.Context, event ProtoEvent, userID spec.EncryptedUserID, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error) {
 	if f.shouldFail {
 		return nil, fmt.Errorf("failed sending invite")
 	}

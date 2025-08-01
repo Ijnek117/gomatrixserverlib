@@ -2,12 +2,14 @@ package fclient
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/matrix-org/gomatrix"
 	"github.com/matrix-org/gomatrixserverlib"
@@ -33,6 +35,7 @@ type FederationClient interface {
 	SendLeave(ctx context.Context, origin, s spec.ServerName, event gomatrixserverlib.PDU) (err error)
 	SendInviteV2(ctx context.Context, origin, s spec.ServerName, request InviteV2Request) (res RespInviteV2, err error)
 	SendInviteV3(ctx context.Context, origin, s spec.ServerName, request InviteV3Request, userID spec.UserID) (res RespInviteV2, err error)
+	SendEncryptedInvite(ctx context.Context, origin, s spec.ServerName, request InviteV3Request, userID spec.EncryptedUserID) (res RespInviteV2, err error)
 	MakeKnock(ctx context.Context, origin, s spec.ServerName, roomID, userID string, roomVersions []gomatrixserverlib.RoomVersion) (res RespMakeKnock, err error)
 	SendKnock(ctx context.Context, origin, s spec.ServerName, event gomatrixserverlib.PDU) (res RespSendKnock, err error)
 
@@ -65,6 +68,8 @@ type FederationClient interface {
 	) (res RespProfile, err error)
 
 	DownloadMedia(ctx context.Context, origin, destination spec.ServerName, mediaID string) (res *http.Response, err error)
+		
+	GetServerTLSCertificate(ctx context.Context, s spec.ServerName) (*x509.Certificate, error) 
 
 	P2PSendTransactionToRelay(ctx context.Context, u spec.UserID, t gomatrixserverlib.Transaction, forwardingServer spec.ServerName) (res EmptyResp, err error)
 	P2PGetTransactionFromRelay(ctx context.Context, u spec.UserID, prev RelayEntry, relayServer spec.ServerName) (res RespGetRelayTransaction, err error)
@@ -440,6 +445,21 @@ func (ac *federationClient) SendInviteV3(
 	return
 }
 
+func (ac *federationClient) SendEncryptedInvite(
+	ctx context.Context, origin, s spec.ServerName, request InviteV3Request, userID spec.EncryptedUserID,
+) (res RespInviteV2, err error) {
+	path := federationPathPrefixV3 + "/invite/" +
+		url.PathEscape(request.Event().RoomID) +
+		"/" +
+		url.PathEscape(userID.String())
+	req := NewFederationRequest("PUT", origin, s, path)
+	if err = req.SetContent(request); err != nil {
+		return
+	}
+	err = ac.doRequest(ctx, req, &res)
+	return
+}
+
 // ExchangeThirdPartyInvite sends the builder of a m.room.member event of
 // "invite" membership derived from a response from invites sent by an identity
 // server.
@@ -780,4 +800,37 @@ func (ac *federationClient) DownloadMedia(
 		return nil, err
 	}
 	return ac.DoHTTPRequest(ctx, httpReq)
+}
+
+func (ac *federationClient) GetServerTLSCertificate(
+    ctx context.Context, targetServerName spec.ServerName,
+) (*x509.Certificate, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	// Use a dummy URL to force a TLS connection.
+	// TODO K: Create an dummy endpoint to call instead.
+    urlStr := fmt.Sprintf("https://%s/_matrix/federation/v1/version", targetServerName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TLS cert request :%w", err)
+	}
+	
+	req.Host = string(targetServerName)
+	resp, err := ac.DoHTTPRequest(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("TLS request to %s failed: %w", targetServerName, err)
+	}
+	defer resp.Body.Close()
+
+	// Ensure the connection was actualy TLS
+	if resp.TLS == nil {
+		return nil, fmt.Errorf("TLS connection not established for %s", targetServerName)
+	}
+
+	if len(resp.TLS.PeerCertificates) == 0 {
+		return nil, fmt.Errorf("no peer certificates presented by %s", targetServerName)
+	}
+
+	// Return the leaf certificate (index 0).
+	return resp.TLS.PeerCertificates[0], nil
 }

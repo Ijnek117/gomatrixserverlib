@@ -43,8 +43,7 @@ type LatestEvents struct {
 type FederatedInviteClient interface {
 	SendInvite(ctx context.Context, event PDU, strippedState []InviteStrippedState) (PDU, error)
 	SendInviteV3(ctx context.Context, event ProtoEvent, userID spec.UserID, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error)
-	//TODO: Eventually make it's own method, but not for now as it causes many errors
-	// SendInviteV4(ctx context.Context, event ProtoEvent, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error)
+	SendEncryptedInvite(ctx context.Context, event ProtoEvent, userID spec.EncryptedUserID, roomVersion RoomVersion, strippedState []InviteStrippedState) (PDU, error)
 }
 
 // InviteStrippedState is a cut-down set of fields from room state
@@ -173,6 +172,15 @@ func abortIfAlreadyJoined(ctx context.Context, roomID spec.RoomID, invitedUser s
 }
 
 func createInviteLogger(ctx context.Context, roomID spec.RoomID, inviter spec.UserID, invitee spec.UserID, eventID string) *logrus.Entry {
+	return util.GetLogger(ctx).WithFields(map[string]interface{}{
+		"inviter":  inviter.String(),
+		"invitee":  invitee.String(),
+		"room_id":  roomID.String(),
+		"event_id": eventID,
+	})
+}
+
+func createEncryptedInviteLogger(ctx context.Context, roomID spec.RoomID, inviter spec.UserID, invitee spec.EncryptedUserID, eventID string) *logrus.Entry {
 	return util.GetLogger(ctx).WithFields(map[string]interface{}{
 		"inviter":  inviter.String(),
 		"invitee":  invitee.String(),
