@@ -441,7 +441,7 @@ func PerformEncryptedInvite(ctx context.Context, input PerformEncryptedInviteInp
 				logger.WithError(err).Error("fedClient.SendInviteV3 returned event with invalid signatures")
 				return nil, spec.Forbidden(err.Error())
 			}
-			//TODO: Change as part of overhalm to how foreign users senderIDs are stored.
+			//TODO: Change as part of overhall to how foreign users senderIDs are stored.
 			fakeUserID := fmt.Sprintf("@%s:%s", *inviteEvent.StateKey(), input.Invitee.Domain())
 			err = input.StoreSenderIDFromPublicID(ctx, spec.SenderID(*inviteEvent.StateKey()), fakeUserID, input.RoomID)
 			if err != nil {

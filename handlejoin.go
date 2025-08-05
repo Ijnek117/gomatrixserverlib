@@ -531,9 +531,9 @@ func HandlePseudoSendJoin(input HandleSendJoinInput) (*HandleSendJoinResponse, e
 		}
 
 		// store the user room public key -> userID Domain mapping
-		// FIXME: K Modified to create a fake userID with random localpart anytime we receive a new server userID.
-		// Can be modified to be any userSigil
+		// FIXME: Modify to map to homeserver instead of a fakeUserID.
 		var customID = mapping.UserID
+		// Modified to take any userSigil
 		if mapping.UserID[0] != '@' {
 			customID = "@a:" + customID
 		}

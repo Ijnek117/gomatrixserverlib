@@ -433,7 +433,7 @@ func (a *allowerContext) createEventAllowed(event PDU) error {
 	if len(event.PrevEventIDs()) > 0 {
 		return errorf("create event must be the first event in the room: found %d prev_events", len(event.PrevEventIDs()))
 	}
-	/* TODO: K removed for now. Might need to modify to work/ add another field in PDU/ do the check earlier?
+	/* TODO: Should be added back as part of greater refactoring to link senderIDs to homeserves not userIDs.
 	sender, err := a.userIDQuerier(a.roomID, event.SenderID())
 	if err != nil {
 		return err
@@ -1050,7 +1050,7 @@ func (m *membershipAllower) membershipAllowed(event PDU) error { // nolint: gocy
 	return m.membershipAllowedOther()
 }
 
-// membershipAllowed checks whether the membership event is allowed
+// membershipAllowed checks whether the membership event is allowed for events in pseudo rooms
 func (m *membershipAllower) membershipAllowedPseudo(event PDU) error { // nolint: gocyclo
 	if m.create.roomID != event.RoomID().String() {
 		return errorf(
@@ -1084,7 +1084,6 @@ func (m *membershipAllower) membershipAllowedPseudo(event PDU) error { // nolint
 
 		// Grab the event ID of the previous event.
 		prevEventID := event.PrevEventIDs()[0]
-
 		if prevEventID == m.create.eventID {
 			// If this is the room creator joining the room directly after the
 			// the create event, then allow.
@@ -1102,7 +1101,6 @@ func (m *membershipAllower) membershipAllowedPseudo(event PDU) error { // nolint
 	if m.targetID == m.senderID {
 		// If the state_key and the sender are the same then this is an attempt
 		// by a user to update their own membership.
-		fmt.Println("All the way here now")
 		return m.membershipAllowedSelf()
 	}
 	// Otherwise this is an attempt to modify the membership of somebody else.

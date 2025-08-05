@@ -79,7 +79,6 @@ func parseAndValidateEncryptedUserID(id string, allowHistoricalIDs bool) (*Encry
 		// NOTE: Allowed in the latest spec:
 		// https://spec.matrix.org/v1.4/appendices/#user-identifiers
 		if !validEncryptedUsernameRegex.MatchString(localpart) {
-			fmt.Printf("\nThis is the extracted localpart: %v\n", localpart)
 			return nil, fmt.Errorf("local part contains invalid characters")
 		}
 	}

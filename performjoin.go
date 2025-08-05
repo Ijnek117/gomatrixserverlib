@@ -70,8 +70,8 @@ func PerformJoin(
 
 	// Try to perform a make_join using the information supplied in the
 	// request.
-	//TODO: K MODIFY TO WORK WITH ALL ROOMS/ Check room versions
-	// SenderID should have already been created during the inital invite dance.
+	//FIXME: MODIFY TO WORK WITH ALL ROOMS by checking room version
+	// Fetch SenderID taht should have already been created during the inital invite dance.
 	var senderID spec.SenderID
 	senderID, signingKey, err := input.GetOrCreateSenderID(ctx, *input.UserID, *input.RoomID, string(RoomVersionPseudoIDs))
 	if err != nil {
@@ -321,6 +321,7 @@ func storeMXIDMappings(
 			continue
 		}
 
+		// FIXME: Modify to map to homeserver instead of a fakeUserID.
 		var customID = mapping.UserID
 		if mapping.UserID[0] != '@' {
 			customID = "@a:" + customID
